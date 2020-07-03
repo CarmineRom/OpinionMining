@@ -185,11 +185,14 @@ def score_aspects(oa_dict):
         # word = opinion[2] + " " + opinion[0]
         word = opinion[0]
         scores = analyzer.polarity_scores(word)
-        sentiment = scores["pos"] if scores["pos"] > scores["neg"] else -scores["neg"]
+        negative = True if scores["neg"] > scores["pos"] else False
+        sentiment = scores["pos"] if scores["pos"] > scores["neg"] else scores["neg"]
         if sentiment != 0 and opinion[2] and vader.BOOSTER_DICT.get(opinion[2]) is not None:
                 sentiment += vader.BOOSTER_DICT[opinion[2]]
         sentiment = -1 if sentiment < -1 else sentiment
         sentiment = 1 if sentiment > 1 else sentiment
+        sentiment = -sentiment if negative else sentiment
+
         return sentiment
 
     def getSentiWord(opinion):
