@@ -39,8 +39,8 @@ def getSent(word):
 print(getSent("terrific"))
 
 analyzer = SentimentIntensityAnalyzer()
-word = "stingy"
-word2 = "stingiest"
+word = "tasty"
+word2 = "good"
 print(analyzer.polarity_scores(word))
 print(analyzer.polarity_scores(word2))
 

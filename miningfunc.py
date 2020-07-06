@@ -5,6 +5,7 @@ from nltk.corpus import wordnet as wn
 import re
 import vaderSentiment.vaderSentiment as vader
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
 # Load english model
 print("Loading english model...")
 nlp = spacy.load("en_core_web_lg")
@@ -69,7 +70,8 @@ def extract_oa_dict(sentence):
         if aspect not in oa_dict.keys():
             oa_dict[aspect] = [opinion]
         else:
-            oa_dict[aspect].append(opinion)
+            if opinion[2] not in [a for n, m, a in oa_dict[aspect]]:
+                oa_dict[aspect].append(opinion)
 
     # Find opinion looking for adjectives
     for token in sentence:
@@ -106,16 +108,16 @@ def extract_oa_dict(sentence):
                             if verb_child.dep_ == "neg":
                                 negation = True
 
-                    addPair(noun_text, (token.text, negation, modifier))
+                    addPair(noun_text, (negation, modifier, token.text))
 
                     # Propagate to conj
                     for child in token.children:
                         if child.dep_ == "conj" and child.tag_ == "JJ":
-                            addPair(noun_text, (child.text, negation, modifier))
+                            addPair(noun_text, (negation, modifier, token.text))
 
                     for child in noun.children:
                         if child.dep_ == "conj" and child.pos_ == "NOUN":
-                            addPair(child.text, (token.text, negation, modifier))
+                            addPair(child.text, (negation, modifier, token.text))
 
             # ACOMP CASE
             if token.dep_ == "acomp" or token.dep_ == "pobj" or token.dep_ == "attr":
@@ -145,7 +147,7 @@ def extract_oa_dict(sentence):
                             if noun_child.dep_ == "compound":
                                 noun_text = noun_child.text + " " + noun_text
 
-                        addPair(noun_text, (token.text, negation, modifier))
+                        addPair(noun_text, (negation, modifier, token.text))
 
                         # Propagate to adjective - conj
                         for child in token.children:
@@ -156,17 +158,17 @@ def extract_oa_dict(sentence):
                                     if subchild.dep_ == "advmod":
                                         modifier = subchild.text
 
-                                addPair(noun_text, (child.text, negation, modifier))
+                                addPair(noun_text, (negation, modifier, token.text))
 
                         # Propagate to subject - conj
                         for child in subject.children:
                             if child.dep_ == "conj" and child.pos_ == "NOUN":
-                                addPair(child.text, (token.text, negation, modifier))
+                                addPair(child.text, (negation, modifier, token.text))
 
     return oa_dict
 
 
-# Get sentiment Score
+# Get Wordnet polarity
 def getSent(word):
     score = 0
     synsets = wn.synsets(word)
@@ -180,53 +182,46 @@ def getSent(word):
     return score / len(synsets)
 
 
-def score_aspects(oa_dict):
-    def getVaderSentiment(opinion):
-        # word = opinion[2] + " " + opinion[0]
-        word = opinion[0]
-        scores = analyzer.polarity_scores(word)
-        negative = True if scores["neg"] > scores["pos"] else False
-        sentiment = scores["pos"] if scores["pos"] > scores["neg"] else scores["neg"]
-        if sentiment != 0 and opinion[2] and vader.BOOSTER_DICT.get(opinion[2]) is not None:
-                sentiment += vader.BOOSTER_DICT[opinion[2]]
-        sentiment = -1 if sentiment < -1 else sentiment
-        sentiment = 1 if sentiment > 1 else sentiment
-        sentiment = -sentiment if negative else sentiment
+def getVaderScores(opinion):
+    phrase = ("not " if opinion[0] else "") + opinion[1] + " " + opinion[2]
+    return analyzer.polarity_scores(phrase), phrase
 
-        return sentiment
 
-    def getSentiWord(opinion):
-
-        sentiment = getSent(opinion[0])
-        if sentiment is None:
-            return 0
-        if sentiment != 0 and opinion[2] and vader.BOOSTER_DICT.get(opinion[2]) is not None:
-            sentiment += vader.BOOSTER_DICT[opinion[2]]
-        sentiment = -1 if sentiment < -1 else sentiment
-        sentiment = 1 if sentiment > 1 else sentiment
-        return sentiment
-
-    rev_sentiments = []
-    for aspect, opinions in oa_dict.items():
-        sentiment = 0
-        count = 0
-        for o in opinions:
-
-            o_sentiment = getVaderSentiment(o)
-            # if o_sentiment == 0:
-            #     o_sentiment = getSentiWord(o)
-            if o[1]:
-                o_sentiment = -o_sentiment if o_sentiment > 0 else o_sentiment+vader.B_INCR
-
-            if o_sentiment != 0:
-                print(aspect + ": ")
-                print(("NEG_  " if o[1] else "") + o[2] + " " + o[0], o_sentiment)
-                # sentiment += o_sentiment
-                # count += 1
-                rev_sentiments.append(o_sentiment)
-
-        # if sentiment != 0:
-        #     rev_sentiment[aspect] = sentiment
-
-    return rev_sentiments
-
+# def score_opinion(opinion):
+#     def getVaderSentiment(opinion):
+#         # word = opinion[2] + " " + opinion[0]
+#         word = opinion[0]
+#         scores = analyzer.polarity_scores(word)
+#         negative = True if scores["neg"] > scores["pos"] else False
+#         # sentiment = scores["neg"] if negative else scores["pos"]
+#         sentiment = scores["compound"]
+#
+#         if sentiment != 0 and opinion[2] and vader.BOOSTER_DICT.get(opinion[2]) is not None:
+#             sentiment += vader.BOOSTER_DICT[opinion[2]]
+#
+#         # sentiment = 1 if sentiment > 1 else sentiment
+#         # sentiment = -sentiment if negative else sentiment
+#
+#         return sentiment
+#
+#     def getSentiWord(opinion):
+#
+#         sentiment = getSent(opinion[0])
+#         if sentiment is None:
+#             return 0
+#         if sentiment != 0 and opinion[2] and vader.BOOSTER_DICT.get(opinion[2]) is not None:
+#             sentiment += vader.BOOSTER_DICT[opinion[2]]
+#         sentiment = -1 if sentiment < -1 else sentiment
+#         sentiment = 1 if sentiment > 1 else sentiment
+#         return sentiment
+#
+#     count = 0
+#
+#     sentiment = getVaderSentiment(opinion)
+#     # if sentiment == 0:
+#     #     sentiment = getSentiWord(o)
+#     if opinion[1]:
+#         sentiment = -sentiment if sentiment > 0 else sentiment + vader.B_INCR if sentiment < 0 else sentiment + vader.B_DECR
+#         # sentiment = -sentiment if sentiment >= 0 else
+#
+#     return sentiment

@@ -29,20 +29,6 @@ nlp = mf.nlp
 
 predictions = []
 
-
-def map_score_stars(score):
-    if score < - 0.5:
-        return 1
-    elif score < -0.1:
-        return 2
-    elif score < 0.1:
-        return 3
-    elif score < 0.6:
-        return 4
-    else:
-        return 5
-
-
 for rev, stars in revs:
     print("Review:")
 
@@ -74,29 +60,63 @@ for rev, stars in revs:
             else:
                 rev_dict[key] = set(values + list(rev_dict[key]))
 
-    # PRINT OUTLIERS
+    # DETERMINE REVIEW POLARITY
+    stars_score = round((float(stars)))
+    if len(rev_dict) > 0:
 
-    # DETERMINE REVIEW SENTIMENT
-    if len(rev_dict) > 1:
-        rev_sentiments = mf.score_aspects(rev_dict)
+        outliers = []
+        rev_polarities = []
 
-        if len(rev_sentiments) > 0:
-            stars_mapped = list(map(map_score_stars, rev_sentiments))
+        print("STARS: " + stars)
+        for aspect, opinions in rev_dict.items():
+            print("Aspect: " + aspect)
+            for opinion in opinions:
+                scores, phrase = mf.getVaderScores(opinion)
+                print("      {0} -- {1}".format(phrase,
+                                                "NEU" if scores["neu"] == 1 else "POS" if scores["pos"] > scores["neg"]
+                                                else "NEG"))
+                if (stars_score < 3 and scores["pos"] > scores["neg"]) or (stars_score > 3 and scores["pos"] < scores["neg"]):
+                    outliers.append((aspect, phrase))
+
+                if scores["neu"] != 1:
+                    rev_polarities.append(scores["compound"])
+
+        # Print Outliers
+        if len(outliers) > 0:
+            print("REVIEW {0} OUTLIERS:".format("POSITIVE" if stars_score < 3 else "NEGATIVE"))
+            for aspect, opinion in outliers:
+                print("Aspect: {0} -- Opinion: {1}".format(aspect, opinion))
+        print(".......................................")
+
+        # Determine stars from polarities
+        if len(rev_polarities) > 0:
+            def map_score_stars(score):
+                if score < - 0.2:
+                    return 1
+                elif score < -0.05:
+                    return 2
+                elif score < 0.1:
+                    return 3
+                elif score < 0.3:
+                    return 4
+                else:
+                    return 5
+
+            stars_mapped = list(map(map_score_stars, rev_polarities))
             total_score = np.mean(stars_mapped)
 
             print("Stars Mapped: " + str(stars_mapped))
             print("Stars Average: " + str(float(total_score)))
-            stars_score = round((float(stars)))
 
-            total_score = math.floor(float(total_score))
+            total_score = round(float(total_score))
             predictions.append((str(stars_score), str(total_score)))
             print("Mapping: ", (str(stars_score), str(total_score)))
 
     else:
         print("No aspect/opinion pairs")
 
-    print("------------")
-    print("------------")
+    print("----------------------------------------------------------------------------------------------------------")
+    print("----------------------------------------------------------------------------------------------------------")
 
 print(predictions)
 
@@ -105,22 +125,11 @@ y_pred = [p[1] for p in predictions]
 cm = cfm(y_true, y_pred)
 
 labels = ['1', '2', '3', '4', '5']
-# labels = [1,2,3,4,5]
+
 f = seaborn.heatmap(cm, annot=True, xticklabels=labels, yticklabels=labels, fmt='g')
 
 print("REVIEWS: " + str(len(revs)))
 print("Predicted: " + str(len(predictions)))
 print(star_dict)
 print(metrics.classification_report(y_true, y_pred, labels=labels))
-
-# print(cm)
-# fig = plt.figure()
-# ax = fig.add_subplot(111)
-# cax = ax.matshow(cm)
-# plt.title('Confusion matrix of the classifier')
-# fig.colorbar(cax)
-# ax.set_xticklabels([''] + labels)
-# ax.set_yticklabels([''] + labels)
-# plt.xlabel('Predicted')
-# plt.ylabel('Stars')
 plt.show()
