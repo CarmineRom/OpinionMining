@@ -4,20 +4,23 @@ import miningfunc as mf
 from miningfunc import nlp
 from miningfunc import extract_oa_dict
 from miningfunc import myprint
-from miningfunc import score_opinion
 from spacy_symspell import SpellingCorrector
 import re
 
-phrase = "You can't really find anything wrong with this place, the pastas and pizzas are both amazing and high quality, the price is very reasonable, the \
-owner and the staff are very friendly, if you're in downtown check this place out, a lot of people think just because it's downtown there \
-are lots of options around but that's not always the case as there is also a lot of poor quality food in downtown as well."
+phrase = "I went to newport motors yesterday to buy a new car.  I bought 2 cars from them previously. They have a new staff now. \
+The new manager there was awful no people skills what so ever.  He didn't speak when we 1st came in he just sent a \
+new guy out to us who didn't know what he was doing. He had to go back and forth to the manager the whole time. \
+Long story short. The manager didn't want to work with my daughter and I. He never came out of his corner. The old staff was \
+great. No matter if they could help you or not they treated everyone with the best customer service. If you want to get a car \
+from newport motors go to the new one on west Sahara. Avoid ( East Sahara ) like the plaque! !!!"
 
 phrase2 = " The portions were small and there wasn't much variety in broth or topping choices."
 
-phrase3 = "I got the Paneer cheese BBQ bowl with brown rice, regular naan and tikka masala, which was very fresh and not very spicy at all I loved the green mint yogurt as well."
+phrase3 = "I went here they were about to close but the cashier was especially helpful but I guess they were tired of work..."
 # print(phrase)
 # corrector = SpellingCorrector()
 # nlp.add_pipe(corrector)
+
 #
 # doc = nlp(phrase)
 # for s in doc._.suggestions:
@@ -28,6 +31,6 @@ phrase3 = "I got the Paneer cheese BBQ bowl with brown rice, regular naan and ti
 # print(oa_dict)
 # print(scoreAspects(oa_dict))
 
-p = phrase2
-print(mf.extract_oa_dict(nlp(p)))
+p = phrase3
+print(mf.extract_oa_dict(nlp(mf.preprocessChars(p))))
 spacy.displacy.serve(nlp(p), style="dep", page="true")

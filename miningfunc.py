@@ -75,7 +75,7 @@ def extract_oa_dict(sentence):
 
     # Find opinion looking for adjectives
     for token in sentence:
-        if token.tag_ == "JJ" or token.tag_ == "JJS":  # JJ-TAG excludes comparative adjectives
+        if token.tag_ in ["JJ", "JJS"]:  # JJ-TAG excludes comparative adjectives
 
             modifier = ""
             negation = False
@@ -111,30 +111,26 @@ def extract_oa_dict(sentence):
                     addPair(noun_text, (negation, modifier, token.text))
 
                     # Propagate to conj
-                    for child in token.children:
-                        if child.dep_ == "conj" and child.tag_ == "JJ":
-                            addPair(noun_text, (negation, modifier, token.text))
+                    for adj_child in token.children:
+                        if adj_child.dep_ == "conj" and adj_child.tag_ in ["JJ", "JJS"]:
+                            addPair(noun_text, (negation, modifier, adj_child.text))
 
-                    for child in noun.children:
-                        if child.dep_ == "conj" and child.pos_ == "NOUN":
-                            addPair(child.text, (negation, modifier, token.text))
+                    for noun_child in noun.children:
+                        if noun_child.dep_ == "conj" and noun_child.pos_ == "NOUN":
+                            addPair(noun_child.text, (negation, modifier, token.text))
 
             # ACOMP CASE
             if token.dep_ == "acomp" or token.dep_ == "pobj" or token.dep_ == "attr":
-
                 verb = token.head
-                while verb.pos_ != "VERB" and verb.pos_ != "AUX" and verb.dep_ == "conj":
+                while (verb.pos_ != "VERB" and verb.pos_ != "AUX") and verb.dep_ == "conj":
                     verb = verb.head
 
                 for verb_child in verb.children:
-
                     if verb_child.dep_ == "neg":
                         negation = True
 
                 for verb_child in verb.children:
-
                     if verb_child.dep_ == "nsubj":
-
                         subject = verb_child
                         # if verb_child.lower_ in pronouns:
                         #     # Subject is a pronoun, find reference
@@ -150,26 +146,29 @@ def extract_oa_dict(sentence):
                         addPair(noun_text, (negation, modifier, token.text))
 
                         # Propagate to adjective - conj
-                        for child in token.children:
-                            if child.dep_ == "conj" and child.tag_ == "JJ":
-                                for subchild in child.children:
+                        for adj_child in token.children:
+                            if adj_child.dep_ == "conj" and adj_child.tag_ in ["JJ", "JJS"]:
+                                # print("C"+adj_child.text)
+                                # for a in adj_child.subtree:
+                                #     print("T"+a.text)
+                                for subchild in adj_child.children:
                                     if subchild.dep_ == "neg":
                                         negation = True
                                     if subchild.dep_ == "advmod":
                                         modifier = subchild.text
 
-                                addPair(noun_text, (negation, modifier, token.text))
+                                addPair(noun_text, (negation, modifier, adj_child.text))
 
                         # Propagate to subject - conj
-                        for child in subject.children:
-                            if child.dep_ == "conj" and child.pos_ == "NOUN":
-                                addPair(child.text, (negation, modifier, token.text))
+                        for subj_child in subject.children:
+                            if subj_child.dep_ == "conj" and subj_child.pos_ == "NOUN":
+                                addPair(subj_child.text, (negation, modifier, token.text))
 
     return oa_dict
 
 
 # Get Wordnet polarity
-def getSent(word):
+def get_sentiW_polarity(word):
     score = 0
     synsets = wn.synsets(word)
     if len(synsets) == 0:
@@ -177,14 +176,38 @@ def getSent(word):
     for set in synsets:
         if set.pos() in ["a", "s"]:
             synset_scores = sentiDict[("a" if set.pos() == "s" else set.pos(), str(set.offset()).zfill(8))]
-            score += synset_scores[0] if synset_scores[0] > synset_scores[1] else -synset_scores[1]
+            score += 0 if synset_scores[0] == synset_scores[1] \
+                else synset_scores[0] if synset_scores[0] >= synset_scores[1] else -synset_scores[1]
 
     return score / len(synsets)
 
 
-def getVaderScores(opinion):
-    phrase = ("not " if opinion[0] else "") + opinion[1] + " " + opinion[2]
-    return analyzer.polarity_scores(phrase), phrase
+def get_polarity(opinion):
+    if opinion[2] in ["expensive", "cheap"]:
+        polarity = -0.5 if opinion[2] == "expensive" else 0.5
+        if opinion[1]:
+            if vader.BOOSTER_DICT.get(opinion[1]) is not None:
+                polarity += vader.BOOSTER_DICT[opinion[1]] if polarity > 0 else -vader.BOOSTER_DICT[opinion[1]]
+        polarity = -polarity if opinion[0] else polarity
+        return polarity
+    # Vader
+    scores = analyzer.polarity_scores(opinion[2])
+    if scores["compound"] != 0:
+        phrase = ("not " if opinion[0] else "") + opinion[1] + " " + opinion[2]
+        scores = analyzer.polarity_scores(phrase)
+        return scores["compound"]
+
+    # Wordent Polarity
+    else:
+        wn_polarity = get_sentiW_polarity(opinion[2])
+        if opinion[1] and not -0.1 < wn_polarity < 0.1:
+            if vader.BOOSTER_DICT.get(opinion[1]) is not None:
+                wn_polarity += vader.BOOSTER_DICT[opinion[1]] if wn_polarity > 0 else -vader.BOOSTER_DICT[opinion[1]]
+
+            wn_polarity = 1 if wn_polarity > 1 else -1 if wn_polarity < -1 else wn_polarity
+
+        wn_polarity = -wn_polarity if opinion[0] else wn_polarity
+        return wn_polarity
 
 
 # def score_opinion(opinion):

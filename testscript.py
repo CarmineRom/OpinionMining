@@ -22,25 +22,26 @@ sentiDict = {}
 for row in filereader:
     sentiDict[(row[0], row[1])] = (float(row[2]), float(row[3]))
 
-
 def getSent(word):
     score = 0
     synsets = wn.synsets(word)
     if len(synsets) == 0:
-        return None
+        return 0
     for set in synsets:
+
         if set.pos() in ["a", "s"]:
             synset_scores = sentiDict[("a" if set.pos() == "s" else set.pos(), str(set.offset()).zfill(8))]
-            score += synset_scores[0] if synset_scores[0] > synset_scores[1] else -synset_scores[1]
+            print(set, synset_scores)
+            score += 0 if synset_scores[0] == synset_scores[1] else synset_scores[0] if synset_scores[0] >= synset_scores[1] else -synset_scores[1]
 
     return score / len(synsets)
 
-
-print(getSent("terrific"))
+print(getSent("helpful"))
 
 analyzer = SentimentIntensityAnalyzer()
-word = "tasty"
-word2 = "good"
+word = "helpful"
+word2 = "especially helpful"
 print(analyzer.polarity_scores(word))
 print(analyzer.polarity_scores(word2))
+
 

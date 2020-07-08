@@ -28,6 +28,7 @@ for row in reader:
 nlp = mf.nlp
 
 predictions = []
+incoherent_revs = []
 
 for rev, stars in revs:
     print("Review:")
@@ -44,7 +45,7 @@ for rev, stars in revs:
     start = 0
     for token in review:
         if token.sent_start:
-            sentences.append(review[start:(token.i - 1)])
+            sentences.append(review[start:(token.i)])
             start = token.i
         if token.i == len(review) - 1:
             sentences.append(review[start:(token.i + 1)])
@@ -61,6 +62,7 @@ for rev, stars in revs:
                 rev_dict[key] = set(values + list(rev_dict[key]))
 
     # DETERMINE REVIEW POLARITY
+    neu_threshold = 0.15
     stars_score = round((float(stars)))
     if len(rev_dict) > 0:
 
@@ -71,15 +73,17 @@ for rev, stars in revs:
         for aspect, opinions in rev_dict.items():
             print("Aspect: " + aspect)
             for opinion in opinions:
-                scores, phrase = mf.getVaderScores(opinion)
-                print("      {0} -- {1}".format(phrase,
-                                                "NEU" if scores["neu"] == 1 else "POS" if scores["pos"] > scores["neg"]
-                                                else "NEG"))
-                if (stars_score < 3 and scores["pos"] > scores["neg"]) or (stars_score > 3 and scores["pos"] < scores["neg"]):
+                phrase = (("not " if opinion[0] else "") + opinion[1] + " " + opinion[2])
+                polarity = mf.get_polarity(opinion)
+                print("      {0} -- {1} -- {2}".format(phrase, "NEU" if -neu_threshold < polarity < neu_threshold else
+                                                                "POS" if polarity > neu_threshold else "NEG", polarity))
+
+                if (stars_score < 3 and polarity > neu_threshold) or (
+                        stars_score > 3 and polarity < - neu_threshold):
                     outliers.append((aspect, phrase))
 
-                if scores["neu"] != 1:
-                    rev_polarities.append(scores["compound"])
+                if not - neu_threshold < polarity < neu_threshold:
+                    rev_polarities.append(polarity)
 
         # Print Outliers
         if len(outliers) > 0:
@@ -88,29 +92,26 @@ for rev, stars in revs:
                 print("Aspect: {0} -- Opinion: {1}".format(aspect, opinion))
         print(".......................................")
 
-        # Determine stars from polarities
+        # Classify Review
         if len(rev_polarities) > 0:
-            def map_score_stars(score):
-                if score < - 0.2:
-                    return 1
-                elif score < -0.05:
-                    return 2
-                elif score < 0.1:
-                    return 3
-                elif score < 0.3:
-                    return 4
+            def classify(score):
+                if score < - neu_threshold:
+                    return "NEG"
+                elif -neu_threshold < score < neu_threshold:
+                    return "NEU"
                 else:
-                    return 5
+                    return "POS"
 
-            stars_mapped = list(map(map_score_stars, rev_polarities))
-            total_score = np.mean(stars_mapped)
 
-            print("Stars Mapped: " + str(stars_mapped))
-            print("Stars Average: " + str(float(total_score)))
+            rev_label = "NEG" if stars_score < 3 else "POS" if stars_score > 3 else "NEU"
+            rev_predict = classify(np.mean(rev_polarities))
 
-            total_score = round(float(total_score))
-            predictions.append((str(stars_score), str(total_score)))
-            print("Mapping: ", (str(stars_score), str(total_score)))
+            print("Label: " + rev_label + "  Prediction: " + rev_predict + " with polarity: " + str(
+                np.mean(rev_polarities)))
+            if (rev_label == "POS" and rev_predict == "NEG") or (rev_label == "NEG" and rev_predict == "POS"):
+                incoherent_revs.append({"rev": rev, "label": rev_label, "pred": rev_predict})
+
+            predictions.append((rev_label, rev_predict))
 
     else:
         print("No aspect/opinion pairs")
@@ -124,12 +125,26 @@ y_true = [p[0] for p in predictions]
 y_pred = [p[1] for p in predictions]
 cm = cfm(y_true, y_pred)
 
-labels = ['1', '2', '3', '4', '5']
+labels = ['NEG', "NEU", "POS"]
 
 f = seaborn.heatmap(cm, annot=True, xticklabels=labels, yticklabels=labels, fmt='g')
 
 print("REVIEWS: " + str(len(revs)))
 print("Predicted: " + str(len(predictions)))
-print(star_dict)
-print(metrics.classification_report(y_true, y_pred, labels=labels))
+print(metrics.classification_report(y_true, y_pred))
+
+import json
+
+inc_revs = {}
+inc_revs["revs"] = incoherent_revs
+print("INCOHERENTS: " + str(len(incoherent_revs)))
+print("NEU " + str(count_neu))
+print("Not NEU " + str(count_notNeu))
+with open("incoherents.txt", "w") as file:
+    json.dump(incoherent_revs, file)
+    # for rev, stars in incoherent_revs:
+    #     print(stars)
+    #     mf.myprint(rev)
+    #     print("-----------------------------------------------")
+    #     file.write(stars+" , "+rev+"\n")
 plt.show()
