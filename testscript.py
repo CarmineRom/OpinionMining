@@ -36,10 +36,10 @@ def getSent(word):
 
     return score / len(synsets)
 
-print(getSent("helpful"))
+print(getSent("tasty"))
 
 analyzer = SentimentIntensityAnalyzer()
-word = "helpful"
+word = "tasty"
 word2 = "especially helpful"
 print(analyzer.polarity_scores(word))
 print(analyzer.polarity_scores(word2))

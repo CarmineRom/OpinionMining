@@ -40,7 +40,7 @@ def myprint(string):
 
 
 def preprocessChars(sentence):
-    rev = re.sub(r"[^a-zA-Z0-9.',:;?]+", ' ', sentence)
+    rev = re.sub(r"[^a-zA-Z0-9.',:;?!]+", ' ', sentence)
     rev = re.sub(r"([;. ]+)([Bb])ut", " but", rev)
     rev = re.sub(r"([;., ]+)([Aa])nd", " and", rev)
 
@@ -78,64 +78,59 @@ def extract_oa_dict(sentence):
         if token.tag_ in ["JJ", "JJS"]:  # JJ-TAG excludes comparative adjectives
 
             modifier = ""
-            negation = False
+            is_shifted = False
 
             for adj_child in token.children:
                 if adj_child.dep_ == "advmod":
                     modifier = adj_child.text
+                if adj_child.dep_ == "neg":
+                    is_shifted = True
 
             # AMOD-NOUN CASE
-            if token.dep_ == "amod" or token.dep_ == "compound":
-
-                for adj_child in token.children:
-                    if adj_child.dep_ == "neg":
-                        negation = True
+            if token.dep_ in ["amod", "compound"]:
 
                 noun = token.head
-                if noun.pos_ == "NOUN" or noun.pos_ == "PROPN":
+                if noun.pos_ in ["NOUN", "PROPN"]:
 
                     # Check if head is a compound noun
                     noun_text = noun.text
                     for noun_child in noun.children:
                         if noun_child.dep_ == "neg":
-                            negation = True
+                            is_shifted = True
                         if noun_child.dep_ == "compound":
                             noun_text = noun_child.text + " " + noun_text
 
-                    if noun.dep_ == "attr" and noun.head.pos_ in ["AUX", "VERB"]:
+                    if noun.dep_ in ["attr", "dobj"] and noun.head.pos_ in ["AUX", "VERB"]:
                         noun_verb = noun.head
                         for verb_child in noun_verb.children:
                             if verb_child.dep_ == "neg":
-                                negation = True
+                                is_shifted = True
 
-                    addPair(noun_text, (negation, modifier, token.text))
+                    addPair(noun_text, (is_shifted, modifier, token.text))
 
-                    # Propagate to conj
+                    # Propagate to subject conjuction
+                    for noun_child in noun.children:
+                        if noun_child.dep_ == "conj" and noun_child.pos_ in ["NOUN", "PROPN"]:
+                            addPair(noun_child.text, (is_shifted, modifier, token.text))
+
+                    # Propagate to adjective conjuction
                     for adj_child in token.children:
                         if adj_child.dep_ == "conj" and adj_child.tag_ in ["JJ", "JJS"]:
-                            addPair(noun_text, (negation, modifier, adj_child.text))
-
-                    for noun_child in noun.children:
-                        if noun_child.dep_ == "conj" and noun_child.pos_ == "NOUN":
-                            addPair(noun_child.text, (negation, modifier, token.text))
+                            addPair(noun_text, (is_shifted, modifier, adj_child.text))
 
             # ACOMP CASE
-            if token.dep_ == "acomp" or token.dep_ == "pobj" or token.dep_ == "attr":
+            if token.dep_ in ["acomp", "pobj", "attr"]:
                 verb = token.head
                 while (verb.pos_ != "VERB" and verb.pos_ != "AUX") and verb.dep_ == "conj":
                     verb = verb.head
 
                 for verb_child in verb.children:
                     if verb_child.dep_ == "neg":
-                        negation = True
+                        is_shifted = True
 
                 for verb_child in verb.children:
                     if verb_child.dep_ == "nsubj":
                         subject = verb_child
-                        # if verb_child.lower_ in pronouns:
-                        #     # Subject is a pronoun, find reference
-                        #     subject = pronounRef(review, verb_child)
-                        #     print("REFERENCE: ", verb_child, subject)
 
                         # Check if subject is a compound noun
                         noun_text = subject.text
@@ -143,26 +138,25 @@ def extract_oa_dict(sentence):
                             if noun_child.dep_ == "compound":
                                 noun_text = noun_child.text + " " + noun_text
 
-                        addPair(noun_text, (negation, modifier, token.text))
+                        addPair(noun_text, (is_shifted, modifier, token.text))
 
-                        # Propagate to adjective - conj
+                        # Propagate to subject conjuction
+                        for subj_child in subject.children:
+                            if subj_child.dep_ == "conj" and subj_child.pos_ == "NOUN":
+                                addPair(subj_child.text, (is_shifted, modifier, token.text))
+
+                        # Propagate to adjective conjuction
                         for adj_child in token.children:
                             if adj_child.dep_ == "conj" and adj_child.tag_ in ["JJ", "JJS"]:
-                                # print("C"+adj_child.text)
-                                # for a in adj_child.subtree:
-                                #     print("T"+a.text)
+                                modifier = ""
+                                is_shifted = False
                                 for subchild in adj_child.children:
                                     if subchild.dep_ == "neg":
-                                        negation = True
+                                        is_shifted = True
                                     if subchild.dep_ == "advmod":
                                         modifier = subchild.text
 
-                                addPair(noun_text, (negation, modifier, adj_child.text))
-
-                        # Propagate to subject - conj
-                        for subj_child in subject.children:
-                            if subj_child.dep_ == "conj" and subj_child.pos_ == "NOUN":
-                                addPair(subj_child.text, (negation, modifier, token.text))
+                                addPair(noun_text, (is_shifted, modifier, adj_child.text))
 
     return oa_dict
 
@@ -183,6 +177,7 @@ def get_sentiW_polarity(word):
 
 
 def get_polarity(opinion):
+    # Vader and SentiWord don't give correct polarity for words: expensive and cheap (Very important!!)
     if opinion[2] in ["expensive", "cheap"]:
         polarity = -0.5 if opinion[2] == "expensive" else 0.5
         if opinion[1]:
@@ -190,6 +185,7 @@ def get_polarity(opinion):
                 polarity += vader.BOOSTER_DICT[opinion[1]] if polarity > 0 else -vader.BOOSTER_DICT[opinion[1]]
         polarity = -polarity if opinion[0] else polarity
         return polarity
+
     # Vader
     scores = analyzer.polarity_scores(opinion[2])
     if scores["compound"] != 0:
@@ -200,7 +196,7 @@ def get_polarity(opinion):
     # Wordent Polarity
     else:
         wn_polarity = get_sentiW_polarity(opinion[2])
-        if opinion[1] and not -0.1 < wn_polarity < 0.1:
+        if opinion[1] and not -0.2 < wn_polarity < 0.2:
             if vader.BOOSTER_DICT.get(opinion[1]) is not None:
                 wn_polarity += vader.BOOSTER_DICT[opinion[1]] if wn_polarity > 0 else -vader.BOOSTER_DICT[opinion[1]]
 
@@ -208,43 +204,3 @@ def get_polarity(opinion):
 
         wn_polarity = -wn_polarity if opinion[0] else wn_polarity
         return wn_polarity
-
-
-# def score_opinion(opinion):
-#     def getVaderSentiment(opinion):
-#         # word = opinion[2] + " " + opinion[0]
-#         word = opinion[0]
-#         scores = analyzer.polarity_scores(word)
-#         negative = True if scores["neg"] > scores["pos"] else False
-#         # sentiment = scores["neg"] if negative else scores["pos"]
-#         sentiment = scores["compound"]
-#
-#         if sentiment != 0 and opinion[2] and vader.BOOSTER_DICT.get(opinion[2]) is not None:
-#             sentiment += vader.BOOSTER_DICT[opinion[2]]
-#
-#         # sentiment = 1 if sentiment > 1 else sentiment
-#         # sentiment = -sentiment if negative else sentiment
-#
-#         return sentiment
-#
-#     def getSentiWord(opinion):
-#
-#         sentiment = getSent(opinion[0])
-#         if sentiment is None:
-#             return 0
-#         if sentiment != 0 and opinion[2] and vader.BOOSTER_DICT.get(opinion[2]) is not None:
-#             sentiment += vader.BOOSTER_DICT[opinion[2]]
-#         sentiment = -1 if sentiment < -1 else sentiment
-#         sentiment = 1 if sentiment > 1 else sentiment
-#         return sentiment
-#
-#     count = 0
-#
-#     sentiment = getVaderSentiment(opinion)
-#     # if sentiment == 0:
-#     #     sentiment = getSentiWord(o)
-#     if opinion[1]:
-#         sentiment = -sentiment if sentiment > 0 else sentiment + vader.B_INCR if sentiment < 0 else sentiment + vader.B_DECR
-#         # sentiment = -sentiment if sentiment >= 0 else
-#
-#     return sentiment

@@ -6,37 +6,43 @@ from sklearn.metrics import confusion_matrix as cfm
 from sklearn import metrics
 import seaborn
 import matplotlib.pyplot as plt
-import math
+import datasetReader
 
-file = open("rev0-5000.csv")
-reader = csv.DictReader(file, fieldnames=["id", "review", "stars"])
+# file = open("rev0-5000.csv")
+# reader = csv.DictReader(file, fieldnames=["id", "review", "stars"])
+# revs = []
+#
+# # Skip first line
+# next(reader)
+#
+# for row in reader:
+#     revs.append((row["review"], row["stars"]))
+
 revs = []
+generator = datasetReader.generator
+rev_dict = {"1.0": 0, "2.0": 0, "3.0": 0, "4.0": 0, "5.0": 0}
 
-star_dict = {"1.0": 0, "2.0": 0, "3.0": 0, "4.0": 0, "5.0": 0}
+while sum(rev_dict.values()) < 5000:
+    el = next(generator)
+    if rev_dict[str(el["stars"])] < 1000:
+        revs.append((el["text"], str(el["stars"])))
+        rev_dict[str(el["stars"])] += 1
 
-# Skip first line
-next(reader)
-
-for row in reader:
-    # if star_dict[row["stars"]] < 501:
-    #     revs.append((row["review"], row["stars"]))
-    #     star_dict[row["stars"]] += 1
-    # if row["stars"] == "1.0":
-    #     revs.append((row["review"], row["stars"]))
-    revs.append((row["review"], row["stars"]))
 
 nlp = mf.nlp
 
 predictions = []
 incoherent_revs = []
+outliers_dic = {1: 0, 2: 0, 4: 0, 5: 0}
 
+stat_outliers = 0
 for rev, stars in revs:
     print("Review:")
 
     # PREPROCESS
 
     # Remove bad chars
-    review = nlp(mf.preprocessChars(rev))
+    review = nlp(mf.preprocessChars(rev.lower()))
     mf.myprint(review.text)
     print("")
 
@@ -63,7 +69,9 @@ for rev, stars in revs:
 
     # DETERMINE REVIEW POLARITY
     neu_threshold = 0.15
-    stars_score = round((float(stars)))
+    stars_score = float(stars)
+
+    has_outliers = False
     if len(rev_dict) > 0:
 
         outliers = []
@@ -76,11 +84,12 @@ for rev, stars in revs:
                 phrase = (("not " if opinion[0] else "") + opinion[1] + " " + opinion[2])
                 polarity = mf.get_polarity(opinion)
                 print("      {0} -- {1} -- {2}".format(phrase, "NEU" if -neu_threshold < polarity < neu_threshold else
-                                                                "POS" if polarity > neu_threshold else "NEG", polarity))
+                "POS" if polarity > neu_threshold else "NEG", polarity))
 
                 if (stars_score < 3 and polarity > neu_threshold) or (
                         stars_score > 3 and polarity < - neu_threshold):
                     outliers.append((aspect, phrase))
+                    has_outliers = True
 
                 if not - neu_threshold < polarity < neu_threshold:
                     rev_polarities.append(polarity)
@@ -94,6 +103,7 @@ for rev, stars in revs:
 
         # Classify Review
         if len(rev_polarities) > 0:
+
             def classify(score):
                 if score < - neu_threshold:
                     return "NEG"
@@ -115,7 +125,8 @@ for rev, stars in revs:
 
     else:
         print("No aspect/opinion pairs")
-
+    if has_outliers:
+        outliers_dic[stars_score] += 1
     print("----------------------------------------------------------------------------------------------------------")
     print("----------------------------------------------------------------------------------------------------------")
 
@@ -129,8 +140,9 @@ labels = ['NEG', "NEU", "POS"]
 
 f = seaborn.heatmap(cm, annot=True, xticklabels=labels, yticklabels=labels, fmt='g')
 
-print("REVIEWS: " + str(len(revs)))
+print("Total reviews: " + str(len(revs)))
 print("Predicted: " + str(len(predictions)))
+print(outliers_dic)
 print(metrics.classification_report(y_true, y_pred))
 
 import json
@@ -138,13 +150,7 @@ import json
 inc_revs = {}
 inc_revs["revs"] = incoherent_revs
 print("INCOHERENTS: " + str(len(incoherent_revs)))
-print("NEU " + str(count_neu))
-print("Not NEU " + str(count_notNeu))
+
 with open("incoherents.txt", "w") as file:
     json.dump(incoherent_revs, file)
-    # for rev, stars in incoherent_revs:
-    #     print(stars)
-    #     mf.myprint(rev)
-    #     print("-----------------------------------------------")
-    #     file.write(stars+" , "+rev+"\n")
 plt.show()

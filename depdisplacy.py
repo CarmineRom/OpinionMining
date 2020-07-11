@@ -16,7 +16,7 @@ from newport motors go to the new one on west Sahara. Avoid ( East Sahara ) like
 
 phrase2 = " The portions were small and there wasn't much variety in broth or topping choices."
 
-phrase3 = "I went here they were about to close but the cashier was especially helpful but I guess they were tired of work..."
+phrase3 = "a word of advice, parking is just horrendous in the plaza which this place is situated within."
 # print(phrase)
 # corrector = SpellingCorrector()
 # nlp.add_pipe(corrector)
