@@ -25,42 +25,12 @@ for row in filereader:
 analyzer = SentimentIntensityAnalyzer()
 
 
-def myprint(string):
-    words = string.split(" ")
-    i = 1
-    s = words[0]
-    while i < len(words):
-        if i % 25 == 0:
-            print(s)
-            s = words[i]
-        else:
-            s = s + " " + words[i]
-        i += 1
-    print(s)
-
-
 def preprocessChars(sentence):
     rev = re.sub(r"[^a-zA-Z0-9.',:;?!]+", ' ', sentence)
     rev = re.sub(r"([;. ]+)([Bb])ut", " but", rev)
     rev = re.sub(r"([;., ]+)([Aa])nd", " and", rev)
 
     return rev
-
-
-def pronoun_ref(review, pronoun_token):
-    print("IN FUN")
-    if pronoun_token.pos_ == "PRON":
-        subj_found = False
-        i = pronoun_token.i - 1
-        while (not subj_found) and i > -1:
-            print("IN WHILE ", i)
-            if review[i].dep_ == "nsubj" or review[i].dep_ != "pobj" and review[i].pos_ == "NOUN":
-                return review[i]
-            i -= 1
-        if not subj_found:
-            return pronoun_token
-    else:
-        return pronoun_token
 
 
 def extract_oa_dict(sentence):
@@ -161,23 +131,22 @@ def extract_oa_dict(sentence):
     return oa_dict
 
 
-# Get Wordnet polarity
-def get_sentiW_polarity(word):
-    score = 0
-    synsets = wn.synsets(word)
-    if len(synsets) == 0:
-        return 0
-    for set in synsets:
-        if set.pos() in ["a", "s"]:
-            synset_scores = sentiDict[("a" if set.pos() == "s" else set.pos(), str(set.offset()).zfill(8))]
-            score += 0 if synset_scores[0] == synset_scores[1] \
-                else synset_scores[0] if synset_scores[0] >= synset_scores[1] else -synset_scores[1]
-
-    return score / len(synsets)
-
-
 def get_polarity(opinion):
-    # Vader and SentiWord don't give correct polarity for words: expensive and cheap (Very important!!)
+    # Get Wordnet polarity
+    def get_sentiW_polarity(word):
+        score = 0
+        synsets = wn.synsets(word)
+        if len(synsets) == 0:
+            return 0
+        for set in synsets:
+            if set.pos() in ["a", "s"]:
+                synset_scores = sentiDict[("a" if set.pos() == "s" else set.pos(), str(set.offset()).zfill(8))]
+                score += 0 if synset_scores[0] == synset_scores[1] \
+                    else synset_scores[0] if synset_scores[0] >= synset_scores[1] else -synset_scores[1]
+
+        return score / len(synsets)
+
+    # Both Vader and SentiWord don't give correct polarity for words expensive and cheap (Very important!!)
     if opinion[2] in ["expensive", "cheap"]:
         polarity = -0.5 if opinion[2] == "expensive" else 0.5
         if opinion[1]:
