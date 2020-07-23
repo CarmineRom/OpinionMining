@@ -19,18 +19,18 @@ input_file = open('Incoherent_Reviews.txt')
 
 labeled_dataset = []
 print("For each review type:\n"
-      "'T' - if there is a temporal problem\n"
-      "'B' - if reviewer has been incoherent "
-      "'N' - if incorrectly predicted and should not be added to dataset")
+      "'i' - to add the review\n"
+      "Any Key - to discard\n")
+
 data = json.load(input_file)
-for p in data[:3]:
+for p in data:
 
     myprint(p["rev"])
     print()
-    print('Stars_label: ' + str(p["label"]) + "  Prediction: " + str(p["pred"]))
+    print("Stars:"+str(p["stars"])+"  Stars_label: " + str(p["label"]) + "  Prediction: " + str(p["pred"]))
     print()
     label = input("Label: ")
-    if not label == "N":
+    if label == "i":
         labeled_dataset.append({"rev": p["rev"], "label": label})
 
 with open("Incoherent_Dataset.txt", "w") as file:

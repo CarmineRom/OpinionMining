@@ -121,7 +121,7 @@ for rev, stars in revs:
             print("Label: " + rev_label + "  Prediction: " + rev_predict + " with polarity: " + str(
                 np.mean(rev_polarities)))
             if (rev_label == "POS" and rev_predict == "NEG") or (rev_label == "NEG" and rev_predict == "POS"):
-                incoherent_revs.append({"rev": rev, "label": rev_label, "pred": rev_predict})
+                incoherent_revs.append({"rev": rev, "label": rev_label, "stars": stars, "pred": rev_predict})
 
             predictions.append((rev_label, rev_predict))
 
@@ -131,6 +131,7 @@ for rev, stars in revs:
         outliers_dic[stars] += 1
     print("----------------------------------------------------------------------------------------------------------")
     print("----------------------------------------------------------------------------------------------------------")
+    input()
 
 y_true = [p[0] for p in predictions]
 y_pred = [p[1] for p in predictions]
